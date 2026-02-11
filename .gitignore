@@ -1,0 +1,14 @@
+# Python / venv
+.venv/
+__pycache__/
+*.pyc
+
+# Segredos
+.env
+secrets/
+*.pfx
+*.p12
+*.pem
+
+# Cache
+.ipynb_checkpoints/

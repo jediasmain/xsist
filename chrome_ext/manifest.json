@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "XSist Connector",
+  "version": "1.0.0",
+  "description": "Extensão para falar com o conector local do XSist",
+  "action": { "default_popup": "popup.html" },
+
+  "permissions": ["downloads", "storage"],
+  "host_permissions": [
+    "http://127.0.0.1:8765/*",
+    "http://localhost:8765/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:*/*",
+        "http://127.0.0.1:*/*",
+
+        "https://SEU_DOMINIO.com.br/*",
+        "https://*.SEU_DOMINIO.com.br/*"
+      ],
+      "js": ["content.js"]
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font-family: Arial, sans-serif; width: 320px; padding: 10px; }
+      button, input, select { width: 100%; padding: 8px; margin: 6px 0; }
+      pre { white-space: pre-wrap; word-break: break-word; background:#111; color:#eee; padding:8px; border-radius:6px; }
+      small { color:#666; }
+      label { display:block; margin-top:8px; }
+      .row { display:flex; gap:8px; }
+      .row > * { flex:1; }
+    </style>
+  </head>
+  <body>
+    <h3>XSist Connector</h3>
+
+    <button id="btnStatus">Ver status do conector</button>
+    <button id="btnVerify">Testar certificado salvo</button>
+    <pre id="statusBox">---</pre>
+
+    <hr />
+
+    <h4>Configuração de download</h4>
+    <small>Salvar automático remove a janela “Salvar como”.</small>
+
+    <label>
+      <input id="saveAs" type="checkbox" />
+      Perguntar onde salvar (Salvar como)
+    </label>
+
+    <input id="folder" placeholder="Subpasta em Downloads (ex: XSist)" />
+
+    <button id="btnSaveCfg">Salvar configuração</button>
+
+    <pre id="cfgBox">---</pre>
+
+    <hr />
+
+    <h4>Configurar Certificado A1</h4>
+    <small>O certificado fica salvo no seu PC (conector local).</small>
+
+    <input id="pfx" type="file" accept=".pfx,.p12" />
+    <input id="senha" type="password" placeholder="Senha do certificado (.pfx)" />
+    <input id="cnpj" placeholder="CNPJ (14 dígitos) - obrigatório para SEFAZ" />
+    <select id="tpamb">
+      <option value="1">Produção (1)</option>
+      <option value="2">Homologação (2)</option>
+    </select>
+
+    <button id="btnSaveCert">Salvar certificado no conector</button>
+
+    <pre id="out">---</pre>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
