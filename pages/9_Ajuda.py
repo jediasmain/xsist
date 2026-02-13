@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import zipfile
 from io import BytesIO
 from pathlib import Path
@@ -12,8 +13,13 @@ try:
 except Exception:
     st_javascript = None
 
-# >>>> ATENÇÃO: se você mudar a versão do release, atualize esta URL:
-CONNECTOR_ZIP_URL = "https://github.com/jediasmain/xsist/releases/download/v0.1.0/XSistConnector.zip"
+from services.github_release import get_latest_release_asset_url
+
+
+# >>> CONFIG DO SEU REPO/ASSET <<<
+GITHUB_OWNER = "jediasmain"
+GITHUB_REPO = "xsist"
+CONNECTOR_ASSET_NAME = "XSistConnector.zip"
 
 
 st.set_page_config(page_title="Ajuda - XSist", layout="wide")
@@ -21,9 +27,6 @@ st.title("Ajuda / Como usar (XSist)")
 st.caption("Modelo FSist: Site (internet) + Extensão Chrome + Conector local (127.0.0.1:8765).")
 
 
-# ----------------------------
-# Helpers
-# ----------------------------
 def read_ls(key: str):
     if not st_javascript:
         return None
@@ -42,8 +45,7 @@ def open_url(url: str):
 
 
 def build_extension_zip() -> bytes:
-    """Gera um ZIP da pasta chrome_ext/ para o usuário baixar."""
-    repo_root = Path(__file__).resolve().parents[1]  # raiz do projeto (um nível acima de /pages)
+    repo_root = Path(__file__).resolve().parents[1]
     ext_dir = repo_root / "chrome_ext"
 
     if not ext_dir.exists():
@@ -58,8 +60,24 @@ def build_extension_zip() -> bytes:
     return buf.getvalue()
 
 
+@st.cache_data(ttl=3600)
+def get_connector_zip_url() -> str | None:
+    token = None
+    try:
+        token = st.secrets.get("GITHUB_TOKEN", None)
+    except Exception:
+        token = os.getenv("GITHUB_TOKEN")
+
+    return get_latest_release_asset_url(
+        owner=GITHUB_OWNER,
+        repo=GITHUB_REPO,
+        asset_name=CONNECTOR_ASSET_NAME,
+        token=token,
+    )
+
+
 # ----------------------------
-# Downloads rápidos (igual Setup)
+# Downloads
 # ----------------------------
 st.header("Downloads (Extensão + Conector)")
 
@@ -80,7 +98,7 @@ with col1:
 
     st.info(
         "Instalar (Chrome):\n"
-        "1) Descompacte o ZIP (vai ter uma pasta `chrome_ext`)\n"
+        "1) Descompacte (pasta `chrome_ext`)\n"
         "2) Abra `chrome://extensions`\n"
         "3) Ative Modo do desenvolvedor\n"
         "4) Carregar sem compactação\n"
@@ -89,7 +107,12 @@ with col1:
 
 with col2:
     st.subheader("Conector (Windows)")
-    st.link_button("Baixar Conector (ZIP)", CONNECTOR_ZIP_URL, use_container_width=True)
+    url = get_connector_zip_url()
+    if url:
+        st.link_button("Baixar Conector (ZIP) - latest", url, use_container_width=True)
+    else:
+        st.error("Não achei XSistConnector.zip no GitHub Releases (latest).")
+
     st.info(
         "Usar:\n"
         "1) Baixe o ZIP\n"
@@ -100,9 +123,8 @@ with col2:
 
 st.divider()
 
-
 # ----------------------------
-# Diagnóstico rápido
+# Diagnóstico
 # ----------------------------
 st.header("Diagnóstico rápido")
 
@@ -135,83 +157,26 @@ else:
 
 st.divider()
 
-
-# ----------------------------
-# Atalhos
-# ----------------------------
-st.header("Ações rápidas (atalhos)")
-a1, a2, a3 = st.columns(3)
-
+st.header("Atalhos")
+a1, a2 = st.columns(2)
 with a1:
     if st.button("Abrir /ping do conector", use_container_width=True):
         open_url("http://127.0.0.1:8765/ping")
-
 with a2:
     if st.button("Abrir /status do conector", use_container_width=True):
         open_url("http://127.0.0.1:8765/status")
 
-with a3:
-    if st.button("Abrir chrome://extensions (manual)", use_container_width=True):
-        st.info("O Chrome bloqueia abrir chrome://extensions via botão. Digite na barra do navegador.")
-
 st.divider()
 
-
-# ----------------------------
-# Passo a passo
-# ----------------------------
-st.header("Passo a passo")
-
-st.subheader("1) Instalar a Extensão do Chrome")
+st.header("Passo a passo resumido")
 st.write(
-    "1) Baixe o ZIP da extensão aqui em cima\n"
-    "2) Descompacte (pasta `chrome_ext`)\n"
-    "3) Abra `chrome://extensions`\n"
-    "4) Ative **Modo do desenvolvedor**\n"
-    "5) Clique **Carregar sem compactação**\n"
-    "6) Selecione a pasta `chrome_ext`\n"
-    "7) Fixe o ícone da extensão na barra do Chrome\n"
-)
-st.info(
-    "Se o seletor de pastas mostrar a pasta 'vazia', é normal. "
-    "Se dentro tiver `manifest.json`, clique em **Selecionar pasta**."
+    "1) Instale a extensão\n"
+    "2) Rode o conector\n"
+    "3) (Opcional) Configure o certificado A1 no popup da extensão\n"
+    "4) Vá em Download e baixe por chave\n"
 )
 
-st.subheader("2) Rodar o Conector (Windows)")
-st.write(
-    "1) Baixe o Conector (ZIP) aqui em cima\n"
-    "2) Extraia\n"
-    "3) Execute `XSistConnector.exe`\n"
-    "4) Deixe a janela aberta\n"
-)
-
-st.subheader("3) Configurar Certificado A1 (para baixar da SEFAZ)")
 st.warning(
-    "Sem A1 (.pfx/.p12) não dá para baixar XML oficial da SEFAZ. "
-    "Precisa também ter permissão/autXML para o documento."
-)
-st.write(
-    "1) Clique no ícone da extensão **XSist Connector**\n"
-    "2) Selecione o `.pfx/.p12`\n"
-    "3) Digite a senha\n"
-    "4) Digite o CNPJ (14 dígitos)\n"
-    "5) Clique **Salvar certificado no conector**\n"
-)
-
-st.subheader("4) Baixar XML")
-st.write(
-    "1) Vá na página **Download**\n"
-    "2) Selecione NFE/CTE\n"
-    "3) Cole a chave (44 dígitos)\n"
-    "4) Clique baixar\n"
-)
-
-st.divider()
-
-st.header("Problemas comuns")
-st.write(
-    "- **Conector não responde / Failed to fetch**: o conector (EXE) não está rodando.\n"
-    "- **Extensão não detectada**: recarregue a extensão em `chrome://extensions` e dê F5 no site.\n"
-    "- **Não baixa da SEFAZ**: falta A1 ou não tem permissão/autXML.\n"
-    "- **Chave inválida**: precisa ter 44 dígitos.\n"
+    "Sem certificado A1 (.pfx/.p12), não dá para baixar XML oficial da SEFAZ. "
+    "Além disso, o certificado precisa ter permissão/autXML para o documento."
 )
