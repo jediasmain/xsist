@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import time
 import streamlit as st
@@ -12,13 +14,14 @@ try:
 except Exception:
     st_autorefresh = None
 
+
 st.set_page_config(page_title="Download", layout="wide")
 st.title("Download por Chave (via Extensão)")
 
 def so_digitos(s: str) -> str:
     return "".join(c for c in (s or "") if c.isdigit())
 
-def read_local_storage(key: str):
+def read_ls(key: str):
     if not st_javascript:
         return None
     val = st_javascript(f"window.parent.localStorage.getItem({json.dumps(key)});")
@@ -29,95 +32,93 @@ def read_local_storage(key: str):
     except Exception:
         return val
 
-def clear_progress():
-    if st_javascript:
-        st_javascript("window.parent.localStorage.removeItem('xsist_progress');")
-        st_javascript("window.parent.localStorage.removeItem('xsist_last_batch');")
-        st_javascript("window.parent.localStorage.removeItem('xsist_last');")
+def post_to_extension(payload: dict):
+    st_javascript(f"window.parent.postMessage({json.dumps(payload)}, '*');")
 
-# Avisos de dependência
+
 if not st_javascript:
-    st.warning("Instale: python -m pip install streamlit-javascript (senão não envia comando para a extensão)")
-if not st_autorefresh:
-    st.warning("Instale: python -m pip install streamlit-autorefresh (senão não atualiza automático)")
+    st.error("Falta o pacote streamlit-javascript no servidor. (python -m pip install streamlit-javascript)")
+    st.stop()
+
+# --- status vindo da extensão ---
+ext_info = read_ls("xsist_extension_info")
+conn_status = read_ls("xsist_connector_status")
+
+colA, colB = st.columns(2)
+with colA:
+    st.subheader("Extensão")
+    if ext_info:
+        st.success("Extensão detectada nesta página.")
+        st.json(ext_info)
+    else:
+        st.error("Extensão NÃO detectada. Recarregue a extensão em chrome://extensions e dê F5 aqui.")
+
+with colB:
+    st.subheader("Conector local")
+    if not conn_status:
+        st.warning("Sem status do conector ainda. Clique em 'Atualizar status do conector'.")
+    else:
+        if conn_status.get("ok"):
+            st.success("Conector respondeu.")
+        else:
+            st.error("Conector não respondeu (OFF).")
+        st.json(conn_status)
+
+st.divider()
+
+# Botão para pedir atualização de status (extensão -> conector)
+if st.button("Atualizar status do conector", type="primary", use_container_width=True):
+    post_to_extension({"type": "XSIST_REFRESH_STATUS"})
+    st.info("Pedido enviado. Aguarde 1s e clique novamente se precisar.")
+
+# --- aviso grande quando faltar A1 ---
+missing_a1 = False
+if isinstance(conn_status, dict) and conn_status.get("ok") and isinstance(conn_status.get("data"), dict):
+    data = conn_status["data"]
+    if not (data.get("has_cert") and data.get("has_password") and data.get("has_cnpj")):
+        missing_a1 = True
+        st.error(
+            "Certificado A1 NÃO configurado no conector.\n\n"
+            "Abra o popup da extensão (ícone na barra do Chrome) e configure:\n"
+            "- arquivo .pfx/.p12\n"
+            "- senha\n"
+            "- CNPJ (14 dígitos)\n\n"
+            "Depois volte aqui e clique em 'Atualizar status do conector'."
+        )
+
+st.divider()
 
 tipo = st.selectbox("Tipo", ["NFE", "CTE"], index=0)
-
-st.subheader("1) Download único")
 chave = st.text_input("Chave (44 dígitos)")
 
-if st.button("Baixar 1 XML via Extensão", type="primary", use_container_width=True):
-    if not st_javascript:
-        st.stop()
+# Depois de clicar, vamos ficar “escutando” o último retorno por alguns segundos
+if "wait_last" not in st.session_state:
+    st.session_state["wait_last"] = False
+if "wait_until" not in st.session_state:
+    st.session_state["wait_until"] = 0
 
+if st.button("Baixar 1 XML via Extensão", use_container_width=True):
     ch = so_digitos(chave)
     if len(ch) != 44:
         st.error("Chave inválida (precisa 44 dígitos).")
         st.stop()
 
-    payload = {"type": "XSIST_DOWNLOAD", "tipo": tipo, "chave": ch}
-    st_javascript(f"window.parent.postMessage({json.dumps(payload)}, '*');")
+    # envia comando para a extensão
+    post_to_extension({"type": "XSIST_DOWNLOAD", "tipo": tipo, "chave": ch})
     st.success("Comando enviado para a extensão.")
 
-st.divider()
+    # inicia espera do retorno
+    st.session_state["wait_last"] = True
+    st.session_state["wait_until"] = time.time() + 8  # 8 segundos
 
-st.subheader("2) Download em lote")
-txt = st.text_area("Cole várias chaves (uma por linha)", height=180)
+# auto refresh curto pra tentar mostrar o último retorno
+if st_autorefresh and st.session_state["wait_last"] and time.time() < st.session_state["wait_until"]:
+    st_autorefresh(interval=1000, key="wait_last_refresh")
 
-colA, colB, colC = st.columns(3)
+last = read_ls("xsist_last")
 
-with colA:
-    if st.button("Iniciar LOTE via Extensão", use_container_width=True):
-        if not st_javascript:
-            st.stop()
-
-        chaves = [so_digitos(x) for x in txt.splitlines() if so_digitos(x)]
-        chaves = [c for c in chaves if len(c) == 44]
-
-        if not chaves:
-            st.error("Nenhuma chave válida (44 dígitos) encontrada.")
-            st.stop()
-
-        batch_id = str(int(time.time()))
-        st.session_state["batch_id"] = batch_id
-        st.session_state["auto_refresh_on"] = True
-
-        clear_progress()
-
-        payload = {"type": "XSIST_DOWNLOAD_BATCH", "tipo": tipo, "chaves": chaves, "batchId": batch_id}
-        st_javascript(f"window.parent.postMessage({json.dumps(payload)}, '*');")
-        st.success(f"Lote enviado para a extensão. Total: {len(chaves)} | batchId={batch_id}")
-
-with colB:
-    if st.button("Parar auto-atualização", use_container_width=True):
-        st.session_state["auto_refresh_on"] = False
-
-with colC:
-    if st.button("Atualizar agora", use_container_width=True):
-        st.rerun()
-
-st.divider()
-st.subheader("Progresso (lote)")
-
-prog = read_local_storage("xsist_progress")
-
-# Liga auto-refresh enquanto estiver "running"
-auto_on = st.session_state.get("auto_refresh_on", False)
-is_running = isinstance(prog, dict) and prog.get("mode") == "batch" and prog.get("status") == "running"
-
-if st_autorefresh and auto_on and is_running:
-    st_autorefresh(interval=1000, key="xsist_auto_refresh")  # 1 segundo
-
-if not prog:
-    st.info("Sem progresso ainda. Inicie um lote.")
+st.subheader("Último retorno (debug)")
+if last:
+    st.json(last)
 else:
-    st.json(prog)
-
-    if prog.get("mode") == "batch" and prog.get("status") == "running":
-        st.write(f"Processando: {prog.get('index')}/{prog.get('total')}")
-        st.write(f"OK={prog.get('okCount')} | ERRO={prog.get('errCount')}")
-        st.write("Chave atual:", prog.get("currentKey"))
-
-    if prog.get("mode") == "batch" and prog.get("status") == "done":
-        st.success(f"Lote finalizado: OK={prog.get('okCount')} | ERRO={prog.get('errCount')}")
-        st.session_state["auto_refresh_on"] = False
+    st.info("Ainda não recebi retorno. (Se a extensão não estiver ativa nesta página, não chega nada.)")
