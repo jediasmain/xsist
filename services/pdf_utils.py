@@ -11,7 +11,14 @@ def _xpath_str(root, expr: str) -> str:
         return ""
 
 
-def _wrap_no_space(text: str, width: int = 32) -> str:
+def _sanitize(text: str) -> str:
+    text = (text or "").replace("\r", " ").replace("\t", " ").strip()
+    # remove caracteres de controle
+    text = "".join(ch for ch in text if ch == "\n" or ord(ch) >= 32)
+    return text or "-"
+
+
+def _wrap_no_space(text: str, width: int = 28) -> str:
     """
     Quebra strings longas sem espaços (ex.: chave) em linhas menores.
     """
@@ -77,19 +84,25 @@ def xml_to_pdf_bytes(xml_text: str) -> bytes:
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=12)
     pdf.add_page()
+
+    # largura útil fixa (não depende do X atual)
+    usable_w = pdf.w - pdf.l_margin - pdf.r_margin
+
     pdf.set_font("Helvetica", size=14)
-    pdf.cell(0, 10, "XSist - Resumo do XML", ln=True)
+    pdf.set_x(pdf.l_margin)
+    pdf.cell(usable_w, 10, "XSist - Resumo do XML", ln=True)
 
     pdf.set_font("Helvetica", size=11)
     pdf.ln(2)
 
     def line(label: str, value: str):
-        value = (value or "-").strip() or "-"
-        # quebra strings longas sem espaço (ex.: chave)
+        value = _sanitize(value)
+
         if label.lower() in ("chave", "qrcode", "url"):
             value = _wrap_no_space(value, 28)
-        pdf.set_font("Helvetica", size=11)
-        pdf.multi_cell(0, 7, f"{label}: {value}")
+
+        pdf.set_x(pdf.l_margin)  # garante margem esquerda
+        pdf.multi_cell(usable_w, 7, f"{label}: {value}")
 
     line("Tipo", fields["tipo"])
     line("Chave", fields["chave"])
