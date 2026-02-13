@@ -11,14 +11,19 @@ def _xpath_str(root, expr: str) -> str:
         return ""
 
 
+def _wrap_no_space(text: str, width: int = 32) -> str:
+    """
+    Quebra strings longas sem espaços (ex.: chave) em linhas menores.
+    """
+    text = (text or "").strip()
+    if not text:
+        return "-"
+    return "\n".join(text[i : i + width] for i in range(0, len(text), width))
+
+
 def extract_basic_fields(xml_text: str) -> dict:
-    """
-    Extrai alguns campos básicos de NF-e ou CT-e (de forma tolerante).
-    Não garante padrão SEFAZ, é só para um PDF-resumo.
-    """
     root = etree.fromstring(xml_text.encode("utf-8", errors="ignore"))
 
-    # tenta descobrir tipo
     xml_lower = xml_text.lower()
     tipo = "DESCONHECIDO"
     if "infnfe" in xml_lower:
@@ -26,28 +31,24 @@ def extract_basic_fields(xml_text: str) -> dict:
     elif "infcte" in xml_lower:
         tipo = "CTE"
 
-    # chave (Id="NFe...." / "CTe....")
     chave = _xpath_str(root, "string(//*[local-name()='infNFe']/@Id)")
-    if chave.startswith("NFe"):
+    if chave.startswith("NFe") and len(chave) >= 47:
         chave = chave[3:47]
     else:
         chave2 = _xpath_str(root, "string(//*[local-name()='infCte' or local-name()='infCTe']/@Id)")
-        if chave2.startswith("CTe"):
+        if chave2.startswith("CTe") and len(chave2) >= 47:
             chave = chave2[3:47]
         else:
-            # fallback: chNFe/chCTe
             chnfe = _xpath_str(root, "string(//*[local-name()='chNFe'])")
-            if len(chnfe) == 44:
+            if len(chnfe) == 44 and chnfe.isdigit():
                 chave = chnfe
             chcte = _xpath_str(root, "string(//*[local-name()='chCTe'])")
-            if len(chcte) == 44:
+            if len(chcte) == 44 and chcte.isdigit():
                 chave = chcte
 
-    # campos comuns
     emit = _xpath_str(root, "string(//*[local-name()='emit']/*[local-name()='xNome'])")
     dest = _xpath_str(root, "string(//*[local-name()='dest']/*[local-name()='xNome'])")
 
-    # data (varia)
     dh = (
         _xpath_str(root, "string(//*[local-name()='ide']/*[local-name()='dhEmi'])")
         or _xpath_str(root, "string(//*[local-name()='ide']/*[local-name()='dEmi'])")
@@ -83,7 +84,11 @@ def xml_to_pdf_bytes(xml_text: str) -> bytes:
     pdf.ln(2)
 
     def line(label: str, value: str):
-        value = value or "-"
+        value = (value or "-").strip() or "-"
+        # quebra strings longas sem espaço (ex.: chave)
+        if label.lower() in ("chave", "qrcode", "url"):
+            value = _wrap_no_space(value, 28)
+        pdf.set_font("Helvetica", size=11)
         pdf.multi_cell(0, 7, f"{label}: {value}")
 
     line("Tipo", fields["tipo"])
