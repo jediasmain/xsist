@@ -157,7 +157,20 @@ python -m uvicorn connector.main:app --host 127.0.0.1 --port 8765 --reload
 
 pause
 """
+st.subheader("Instalar Conector (Windows)")
 
+st.link_button(
+    "Baixar XSistConnector (ZIP)",
+    "https://github.com/jediasmain/xsist/releases/download/v0.1.0/XSistConnector.zip"
+)
+
+st.info(
+    "Como usar:\n"
+    "1) Baixe o ZIP\n"
+    "2) Extraia\n"
+    "3) Execute XSistConnector.exe\n"
+    "4) Volte no Setup e clique em 'Atualizar status'"
+)
 st.download_button(
     "Baixar iniciar_conector.bat",
     data=bat_conector,
